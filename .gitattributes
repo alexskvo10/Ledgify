@@ -1,0 +1,8 @@
+# Normalise line endings: LF everywhere, CRLF only where Windows tools expect it.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+windows/** text eol=crlf
+*.png binary
+*.ico binary
+*.jpg binary
