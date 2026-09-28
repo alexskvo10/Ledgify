@@ -87,6 +87,10 @@ class _StatsScreenState extends State<StatsScreen> {
                   ),
                 ),
               ),
+              if (subs.nextPayment case final next?) ...[
+                SectionLabel(s.nextChargeTitle),
+                _NextCharge(payment: next),
+              ],
               SectionLabel(s.budget),
               const _BudgetCard(),
               SectionLabel(
@@ -167,6 +171,53 @@ class _Metric extends StatelessWidget {
   }
 }
 
+class _NextCharge extends StatelessWidget {
+  const _NextCharge({required this.payment});
+  final Payment payment;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final p = context.palette;
+    final subs = context.read<SubsProvider>();
+    final sub = payment.sub;
+    return AppCard(
+      onTap: () => openSubDetail(context, sub),
+      child: Row(
+        children: [
+          ServiceAvatar.of(sub, size: 44),
+          const SizedBox(width: Space.m + 2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sub.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyles.headline,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  s.fullDate(payment.date, subs.today),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyles.footnote.copyWith(color: p.warning),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: Space.m),
+          Text(
+            s.money(sub.amount, sub.currency),
+            style: TextStyles.amount.copyWith(color: p.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BudgetCard extends StatelessWidget {
   const _BudgetCard();
 
@@ -220,13 +271,24 @@ class _BudgetCard extends StatelessWidget {
   }
 }
 
-class _TrendCard extends StatelessWidget {
+class _TrendCard extends StatefulWidget {
   const _TrendCard({required this.trends, required this.currency});
   final List<MonthlyTotal> trends;
   final String currency;
 
   @override
+  State<_TrendCard> createState() => _TrendCardState();
+}
+
+/// Bars sit on faint full-height tracks; the bar under the pointer lights up
+/// and shows its month and total.
+class _TrendCardState extends State<_TrendCard> {
+  int _touched = -1;
+
+  @override
   Widget build(BuildContext context) {
+    final trends = widget.trends;
+    final currency = widget.currency;
     final s = S.of(context);
     final p = context.palette;
     final maxY = trends.fold(0.0, (m, t) => t.total > m ? t.total : m);
@@ -249,6 +311,12 @@ class _TrendCard extends StatelessWidget {
                   FlLine(color: p.stroke, strokeWidth: 1, dashArray: [4, 4]),
             ),
             barTouchData: BarTouchData(
+              touchCallback: (event, resp) {
+                final i = event.isInterestedForInteractions
+                    ? (resp?.spot?.touchedBarGroupIndex ?? -1)
+                    : -1;
+                if (i != _touched) setState(() => _touched = i);
+              },
               touchTooltipData: BarTouchTooltipData(
                 getTooltipColor: (_) => p.isDark ? p.sunken : p.textPrimary,
                 tooltipBorderRadius: BorderRadius.circular(Radii.s),
@@ -303,11 +371,18 @@ class _TrendCard extends StatelessWidget {
                     BarChartRodData(
                       toY: t.total,
                       width: trends.length > 6 ? 14 : 22,
-                      color: i == trends.length - 1
+                      color: i == _touched || i == trends.length - 1
                           ? p.accent
                           : p.accent.withValues(alpha: 0.45),
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(6),
+                      ),
+                      backDrawRodData: BackgroundBarChartRodData(
+                        show: true,
+                        toY: top,
+                        color: i == _touched
+                            ? p.accent.withValues(alpha: 0.12)
+                            : p.sunken.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -322,7 +397,7 @@ class _TrendCard extends StatelessWidget {
   }
 }
 
-class _CategoryCard extends StatelessWidget {
+class _CategoryCard extends StatefulWidget {
   const _CategoryCard({
     required this.data,
     required this.currency,
@@ -332,36 +407,71 @@ class _CategoryCard extends StatelessWidget {
 
   final Map<SubCategory, double> data;
   final String currency;
+
+  /// Category pinned by a click (stays highlighted).
   final SubCategory? highlight;
   final ValueChanged<SubCategory> onHighlight;
+
+  @override
+  State<_CategoryCard> createState() => _CategoryCardState();
+}
+
+/// The ring reacts to the pointer: hovering a segment (or a legend row)
+/// pops that segment out, shows its share inside it and its total in the
+/// centre; a click pins it. On touch screens a tap does the same.
+class _CategoryCardState extends State<_CategoryCard> {
+  SubCategory? _hovered;
+
+  void _hover(SubCategory? c) {
+    if (c != _hovered) setState(() => _hovered = c);
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final p = context.palette;
+    final data = widget.data;
     final entries = data.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final total = entries.fold(0.0, (sum, e) => sum + e.value);
-    final focus = highlight != null && data.containsKey(highlight)
-        ? highlight
+    final pinned =
+        widget.highlight != null && data.containsKey(widget.highlight)
+        ? widget.highlight
         : null;
+    final focus = (_hovered != null && data.containsKey(_hovered))
+        ? _hovered
+        : pinned;
+
+    String pct(double v) => '${(total == 0 ? 0 : v / total * 100).round()}%';
 
     final chart = SizedBox(
-      width: 200,
-      height: 200,
+      width: 220,
+      height: 220,
       child: Stack(
         alignment: Alignment.center,
         children: [
           PieChart(
             PieChartData(
               sectionsSpace: 2,
-              centerSpaceRadius: 64,
+              centerSpaceRadius: 66,
               startDegreeOffset: -90,
               pieTouchData: PieTouchData(
+                mouseCursorResolver: (event, resp) =>
+                    (resp?.touchedSection?.touchedSectionIndex ?? -1) >= 0
+                    ? SystemMouseCursors.click
+                    : MouseCursor.defer,
                 touchCallback: (event, resp) {
                   final i = resp?.touchedSection?.touchedSectionIndex ?? -1;
-                  if (event is FlTapUpEvent && i >= 0 && i < entries.length) {
-                    onHighlight(entries[i].key);
+                  final hit = i >= 0 && i < entries.length
+                      ? entries[i].key
+                      : null;
+                  if (!event.isInterestedForInteractions) {
+                    _hover(null); // pointer left the ring
+                    return;
+                  }
+                  _hover(hit);
+                  if (event is FlTapUpEvent && hit != null) {
+                    widget.onHighlight(hit);
                   }
                 },
               ),
@@ -371,34 +481,57 @@ class _CategoryCard extends StatelessWidget {
                     value: e.value,
                     color: focus == null || focus == e.key
                         ? e.key.color
-                        : e.key.color.withValues(alpha: 0.25),
-                    radius: focus == e.key ? 30 : 24,
-                    showTitle: false,
+                        : e.key.color.withValues(alpha: 0.3),
+                    radius: focus == e.key ? 34 : 26,
+                    showTitle: focus == e.key,
+                    title: pct(e.value),
+                    titleStyle: TextStyles.micro.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      shadows: const [
+                        Shadow(color: Colors.black38, blurRadius: 4),
+                      ],
+                    ),
+                    titlePositionPercentageOffset: 0.55,
+                    borderSide: focus == e.key
+                        ? BorderSide(
+                            color: e.key.color.withValues(alpha: 0.55),
+                            width: 4,
+                          )
+                        : BorderSide.none,
                   ),
               ],
             ),
             duration: Motion.base,
+            curve: Motion.enter,
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                focus == null ? s.perMonth : s.category(focus),
-                style: TextStyles.footnote.copyWith(color: p.textSecondary),
+          IgnorePointer(
+            child: AnimatedSwitcher(
+              duration: Motion.fast,
+              child: Column(
+                key: ValueKey(focus),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    focus == null ? s.perMonth : s.category(focus),
+                    style: TextStyles.footnote.copyWith(color: p.textSecondary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    s.money(
+                      focus == null ? total : data[focus]!,
+                      widget.currency,
+                      whole: true,
+                    ),
+                    style: TextStyles.title2.copyWith(
+                      color: focus == null ? p.textPrimary : focus.color,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                s.money(
-                  focus == null ? total : data[focus]!,
-                  currency,
-                  whole: true,
-                ),
-                style: TextStyles.title2.copyWith(
-                  color: focus == null ? p.textPrimary : focus.color,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -407,49 +540,62 @@ class _CategoryCard extends StatelessWidget {
     final legend = Column(
       children: [
         for (final e in entries)
-          InkWell(
-            borderRadius: BorderRadius.circular(Radii.s),
-            onTap: () => onHighlight(e.key),
-            child: AnimatedContainer(
-              duration: Motion.fast,
-              padding: const EdgeInsets.symmetric(
-                horizontal: Space.s,
-                vertical: Space.s,
-              ),
-              decoration: BoxDecoration(
-                color: focus == e.key ? p.tint(e.key.color) : null,
-                borderRadius: BorderRadius.circular(Radii.s),
-              ),
-              child: Row(
-                children: [
-                  Dot(e.key.color, size: 10),
-                  const SizedBox(width: Space.s + 2),
-                  Expanded(
-                    child: Text(
-                      s.category(e.key),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyles.callout,
+          MouseRegion(
+            onEnter: (_) => _hover(e.key),
+            onExit: (_) => _hover(null),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(Radii.s),
+              onTap: () => widget.onHighlight(e.key),
+              hoverColor: Colors.transparent,
+              child: AnimatedContainer(
+                duration: Motion.fast,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Space.s,
+                  vertical: Space.s,
+                ),
+                decoration: BoxDecoration(
+                  color: focus == e.key ? p.tint(e.key.color) : null,
+                  borderRadius: BorderRadius.circular(Radii.s),
+                ),
+                child: Row(
+                  children: [
+                    AnimatedScale(
+                      scale: focus == e.key ? 1.35 : 1,
+                      duration: Motion.fast,
+                      child: Dot(e.key.color, size: 10),
                     ),
-                  ),
-                  Text(
-                    s.money(e.value, currency, whole: true),
-                    style: TextStyles.callout.copyWith(
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 44,
-                    child: Text(
-                      '${(total == 0 ? 0 : e.value / total * 100).round()}%',
-                      textAlign: TextAlign.end,
-                      style: TextStyles.footnote.copyWith(
-                        color: p.textTertiary,
+                    const SizedBox(width: Space.s + 2),
+                    Expanded(
+                      child: Text(
+                        s.category(e.key),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyles.callout.copyWith(
+                          fontWeight: focus == e.key
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    Text(
+                      s.money(e.value, widget.currency, whole: true),
+                      style: TextStyles.callout.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: Text(
+                        pct(e.value),
+                        textAlign: TextAlign.end,
+                        style: TextStyles.footnote.copyWith(
+                          color: p.textTertiary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

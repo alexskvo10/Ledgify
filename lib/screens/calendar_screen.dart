@@ -144,7 +144,7 @@ class _Header extends StatelessWidget {
         const SizedBox(height: Space.s),
         // Count-up from the previous month's total to this one.
         TweenAnimationBuilder<double>(
-          tween: Tween(end: total),
+          tween: Tween(begin: 0, end: total),
           duration: Motion.counter,
           curve: Motion.enter,
           builder: (_, v, _) => FittedBox(
@@ -209,19 +209,22 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Container(
+    return AnimatedContainer(
+      duration: Motion.slow,
+      curve: Motion.enter,
       padding: const EdgeInsets.symmetric(horizontal: Space.m, vertical: 6),
       decoration: BoxDecoration(
         color: filled ? p.tint(color) : Colors.transparent,
         borderRadius: BorderRadius.circular(Radii.pill),
         border: Border.all(color: color.withValues(alpha: filled ? 0.35 : 0.3)),
       ),
-      child: Text(
-        text,
+      child: AnimatedDefaultTextStyle(
+        duration: Motion.slow,
         style: TextStyles.subhead.copyWith(
           color: color,
           fontWeight: FontWeight.w600,
         ),
+        child: Text(text),
       ),
     );
   }
@@ -444,6 +447,39 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final isToday = date == context.read<SubsProvider>().today;
+    final has = payments.isNotEmpty;
+
+    return _HoverBuilder(
+      builder: (context, hover) {
+        // Heat tint by share of the busiest day; the mouse brightens the
+        // cell, outlines it and (for days with charges) lifts it slightly.
+        final bg = has
+            ? Color.alphaBlend(
+                p.accent.withValues(
+                  alpha: 0.08 + 0.22 * intensity + (hover ? 0.1 : 0),
+                ),
+                p.surface,
+              )
+            : (hover
+                  ? p.surface
+                  : p.surface.withValues(alpha: p.isDark ? 0.45 : 0.6));
+        final border = isToday
+            ? BorderSide(color: p.accent, width: 1.6)
+            : BorderSide(
+                color: hover
+                    ? (has ? p.accent.withValues(alpha: 0.6) : p.strokeStrong)
+                    : (has
+                          ? p.accent.withValues(alpha: 0.18)
+                          : Colors.transparent),
+              );
+        return _cell(context, bg, border, hover && has);
+      },
+    );
+  }
+
+  Widget _cell(BuildContext context, Color bg, BorderSide border, bool lift) {
     final s = S.of(context);
     final p = context.palette;
     final subs = context.read<SubsProvider>();
@@ -452,17 +488,11 @@ class _DayCell extends StatelessWidget {
     final isPast = date.isBefore(today);
     final has = payments.isNotEmpty;
 
-    final avatar = width < 44 ? 13.0 : 16.0;
-    final slots = math.max(1, ((width - 8) / (avatar + 2)).floor());
+    final avatar = width < 44 ? 12.0 : (width < 52 ? 14.0 : 16.0);
+    // 5 px padding + up to 1.6 px border on each side.
+    final slots = math.max(1, ((width - 14) / (avatar + 2)).floor());
     final shown = payments.length > slots ? slots - 1 : payments.length;
     final extra = payments.length - shown;
-
-    final bg = has
-        ? Color.alphaBlend(
-            p.accent.withValues(alpha: 0.08 + 0.22 * intensity),
-            p.surface,
-          )
-        : p.surface.withValues(alpha: p.isDark ? 0.45 : 0.6);
 
     return Semantics(
       button: has,
@@ -475,65 +505,81 @@ class _DayCell extends StatelessWidget {
               (x) => '${x.sub.name}  ${s.money(x.sub.amount, x.sub.currency)}',
             )
             .join('\n'),
-        child: Material(
-          color: bg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Radii.m - 2),
-            side: isToday
-                ? BorderSide(color: p.accent, width: 1.6)
-                : BorderSide(
-                    color: has
-                        ? p.accent.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                  ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: has ? () => _open(context) : null,
-            child: Padding(
-              padding: const EdgeInsets.all(5),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${date.day}',
-                    style: TextStyles.footnote.copyWith(
-                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                      color: isToday
-                          ? p.accentText
-                          : (isPast ? p.textTertiary : p.textSecondary),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (has) ...[
-                    Row(
-                      children: [
-                        for (final x in payments.take(shown)) ...[
-                          ServiceAvatar.of(x.sub, size: avatar),
-                          const SizedBox(width: 2),
-                        ],
-                        if (extra > 0)
-                          Text(
-                            '+$extra',
-                            style: TextStyles.micro.copyWith(
-                              color: p.textSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (width >= 40) ...[
-                      const SizedBox(height: 2),
+        child: AnimatedScale(
+          scale: lift ? 1.05 : 1,
+          duration: Motion.fast,
+          curve: Motion.enter,
+          child: AnimatedContainer(
+            duration: Motion.fast,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(Radii.m - 2),
+              border: Border.fromBorderSide(border),
+              boxShadow: lift
+                  ? [
+                      BoxShadow(
+                        color: p.accent.withValues(alpha: 0.25),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              borderRadius: BorderRadius.circular(Radii.m - 2),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: has ? () => _open(context) : null,
+                mouseCursor: has ? SystemMouseCursors.click : MouseCursor.defer,
+                child: Padding(
+                  padding: const EdgeInsets.all(5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        s.moneyTiny(total, subs.baseCurrency),
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: TextStyles.micro.copyWith(
-                          color: p.isDark ? p.textPrimary : p.accentText,
+                        '${date.day}',
+                        style: TextStyles.footnote.copyWith(
+                          fontWeight: isToday
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: isToday
+                              ? p.accentText
+                              : (isPast ? p.textTertiary : p.textSecondary),
                         ),
                       ),
+                      const Spacer(),
+                      if (has) ...[
+                        Row(
+                          children: [
+                            for (final x in payments.take(shown)) ...[
+                              ServiceAvatar.of(x.sub, size: avatar),
+                              const SizedBox(width: 2),
+                            ],
+                            if (extra > 0)
+                              Text(
+                                '+$extra',
+                                style: TextStyles.micro.copyWith(
+                                  color: p.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (width >= 40) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            s.moneyTiny(total, subs.baseCurrency),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: TextStyles.micro.copyWith(
+                              color: p.isDark ? p.textPrimary : p.accentText,
+                            ),
+                          ),
+                        ],
+                      ],
                     ],
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -541,6 +587,26 @@ class _DayCell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Tracks whether the mouse is over [builder]'s widget.
+class _HoverBuilder extends StatefulWidget {
+  const _HoverBuilder({required this.builder});
+  final Widget Function(BuildContext context, bool hover) builder;
+
+  @override
+  State<_HoverBuilder> createState() => _HoverBuilderState();
+}
+
+class _HoverBuilderState extends State<_HoverBuilder> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _hover = true),
+    onExit: (_) => setState(() => _hover = false),
+    child: widget.builder(context, _hover),
+  );
 }
 
 class _MaybeTooltip extends StatelessWidget {

@@ -259,10 +259,27 @@ class _ListScreenState extends State<ListScreen> {
                   separatorBuilder: (_, _) => const SizedBox(height: Space.s),
                   itemBuilder: (context, i) {
                     final sub = items[i];
+                    // Swipe right → edit, swipe left → delete (with Undo).
                     return Dismissible(
                       key: ValueKey(sub.id),
-                      direction: DismissDirection.endToStart,
-                      background: _SwipeBackground(label: s.delete),
+                      background: _SwipeBackground(
+                        label: s.edit,
+                        icon: Icons.edit_outlined,
+                        color: p.accentText,
+                        alignLeft: true,
+                      ),
+                      secondaryBackground: _SwipeBackground(
+                        label: s.delete,
+                        icon: Icons.delete_outline_rounded,
+                        color: p.danger,
+                      ),
+                      confirmDismiss: (dir) async {
+                        if (dir == DismissDirection.startToEnd) {
+                          openSubForm(context, existing: sub);
+                          return false;
+                        }
+                        return true;
+                      },
                       onDismissed: (_) => deleteWithUndo(context, sub),
                       child: SubTile(
                         sub: sub,
@@ -280,32 +297,39 @@ class _ListScreenState extends State<ListScreen> {
 }
 
 class _SwipeBackground extends StatelessWidget {
-  const _SwipeBackground({required this.label});
+  const _SwipeBackground({
+    required this.label,
+    required this.icon,
+    required this.color,
+    this.alignLeft = false,
+  });
   final String label;
+  final IconData icon;
+  final Color color;
+  final bool alignLeft;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final text = Text(
+      label,
+      style: TextStyles.callout.copyWith(
+        color: color,
+        fontWeight: FontWeight.w600,
+      ),
+    );
     return Container(
       decoration: BoxDecoration(
-        color: p.tint(p.danger, 1.3),
+        color: p.tint(color, 1.3),
         borderRadius: Radii.card,
       ),
-      padding: const EdgeInsets.only(right: Space.xxl),
-      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: Space.xxl),
+      alignment: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyles.callout.copyWith(
-              color: p.danger,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: Space.s),
-          Icon(Icons.delete_outline_rounded, color: p.danger),
-        ],
+        children: alignLeft
+            ? [Icon(icon, color: color), const SizedBox(width: Space.s), text]
+            : [text, const SizedBox(width: Space.s), Icon(icon, color: color)],
       ),
     );
   }

@@ -9,6 +9,8 @@ library;
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -151,6 +153,43 @@ void main() {
     const assets = 'docs/assets';
     await boot(tester, theme: 'dark', lang: 'ru', size: desktop, stress: false);
     await shot(tester, 'screen-desktop', dir: assets);
+  });
+
+  // Mouse-over effects (ring segment, day cell, card outline, add button).
+  testWidgets('hover effects', (tester) async {
+    await boot(tester, theme: 'dark', lang: 'ru', size: desktop, stress: false);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+
+    // A calendar day with a charge + the add button.
+    await mouse.moveTo(tester.getCenter(find.text('4').first));
+    await shot(tester, 'hover_1_day');
+    await mouse.moveTo(tester.getCenter(find.text('Добавить подписку')));
+    await shot(tester, 'hover_2_add_button');
+
+    // Card outline in the month list.
+    await mouse.moveTo(tester.getCenter(find.text('Spotify').first));
+    await shot(tester, 'hover_3_card');
+
+    // Ring segment on the statistics tab.
+    await tester.tap(find.byIcon(Icons.donut_large_rounded));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byType(SingleChildScrollView).first,
+      const Offset(0, -420),
+    );
+    await tester.pumpAndSettle();
+    final ring = tester.getCenter(find.byType(PieChart));
+    // 45° to the right of the top: inside the biggest (first) segment.
+    await mouse.moveTo(ring + const Offset(56, -56));
+    await shot(tester, 'hover_4_ring');
+    // The centre label switches from "per month" to the hovered category,
+    // so its name is shown twice (centre + legend).
+    expect(find.text('Работа'), findsNWidgets(2));
+    await mouse.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+    expect(find.text('Работа'), findsOneWidget);
   });
 
   testWidgets('readme phone screenshots', (tester) async {

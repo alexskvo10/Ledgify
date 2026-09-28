@@ -210,63 +210,18 @@ class _SegmentedTabs extends StatelessWidget {
           ),
           child: Row(
             children: [
-              for (var i = 0; i < labels.length; i++)
+              for (var i = 0; i < labels.length; i++) ...[
+                if (i > 0) const SizedBox(width: 2),
                 Expanded(
-                  child: Semantics(
-                    selected: i == active,
-                    button: true,
+                  child: _Tab(
                     label: labels[i],
-                    excludeSemantics: true,
-                    child: Tooltip(
-                      message: 'Ctrl+${i + 1}',
-                      waitDuration: const Duration(seconds: 1),
-                      child: Material(
-                        color: i == active ? p.sunken : Colors.transparent,
-                        borderRadius: BorderRadius.circular(Radii.s),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => onChanged(i),
-                          child: AnimatedContainer(
-                            duration: Motion.base,
-                            curve: Motion.enter,
-                            height: 36,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: Space.s,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  icons[i],
-                                  size: 17,
-                                  color: i == active
-                                      ? p.accentText
-                                      : p.textTertiary,
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    labels[i],
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyles.subhead.copyWith(
-                                      color: i == active
-                                          ? p.textPrimary
-                                          : p.textSecondary,
-                                      fontWeight: i == active
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    icon: icons[i],
+                    shortcut: 'Ctrl+${i + 1}',
+                    active: i == active,
+                    onTap: () => onChanged(i),
                   ),
                 ),
+              ],
             ],
           ),
         ),
@@ -275,10 +230,131 @@ class _SegmentedTabs extends StatelessWidget {
   }
 }
 
-class _AddButton extends StatelessWidget {
+/// One segment. The active tab shows its label and a soft green glow;
+/// inactive ones show just the icon (the label is in the tooltip) and
+/// brighten under the mouse.
+class _Tab extends StatefulWidget {
+  const _Tab({
+    required this.label,
+    required this.icon,
+    required this.shortcut,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final String shortcut;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  State<_Tab> createState() => _TabState();
+}
+
+class _TabState extends State<_Tab> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final active = widget.active;
+    return Semantics(
+      selected: active,
+      button: true,
+      label: widget.label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: active
+            ? widget.shortcut
+            : '${widget.label}  (${widget.shortcut})',
+        waitDuration: const Duration(milliseconds: 500),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: Motion.base,
+              curve: Motion.enter,
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: Space.s),
+              decoration: BoxDecoration(
+                color: active
+                    ? p.sunken
+                    : (_hover
+                          ? p.sunken.withValues(alpha: 0.5)
+                          : Colors.transparent),
+                borderRadius: BorderRadius.circular(Radii.s),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: p.accent.withValues(
+                            alpha: p.isDark ? 0.18 : 0.22,
+                          ),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.icon,
+                    size: 17,
+                    color: active
+                        ? p.accentText
+                        : (_hover ? p.textSecondary : p.textTertiary),
+                  ),
+                  // The label slides in only for the active tab.
+                  Flexible(
+                    child: AnimatedSize(
+                      duration: Motion.base,
+                      curve: Motion.enter,
+                      child: active
+                          ? Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: Text(
+                                widget.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyles.subhead.copyWith(
+                                  color: p.accentText,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pill "Add" button: grows slightly and glows brighter under the mouse,
+/// shrinks a touch while pressed.
+class _AddButton extends StatefulWidget {
   const _AddButton({required this.label, required this.onTap});
   final String label;
   final VoidCallback onTap;
+
+  @override
+  State<_AddButton> createState() => _AddButtonState();
+}
+
+class _AddButtonState extends State<_AddButton> {
+  bool _hover = false;
+  bool _down = false;
 
   @override
   Widget build(BuildContext context) {
@@ -286,32 +362,45 @@ class _AddButton extends StatelessWidget {
     return Tooltip(
       message: 'Ctrl+N',
       waitDuration: const Duration(seconds: 1),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(Radii.pill),
-          boxShadow: [
-            BoxShadow(
-              color: p.accent.withValues(alpha: p.isDark ? 0.35 : 0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: p.accentFill,
-          shape: const StadiumBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _down = true),
+          onTapUp: (_) => setState(() => _down = false),
+          onTapCancel: () => setState(() => _down = false),
+          onTap: widget.onTap,
+          child: AnimatedScale(
+            scale: _down ? 0.97 : (_hover ? 1.04 : 1.0),
+            duration: Motion.fast,
+            curve: Motion.enter,
+            child: AnimatedContainer(
+              duration: Motion.fast,
               padding: const EdgeInsets.fromLTRB(18, 14, 22, 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    p.accentFill,
+                    Color.lerp(p.accentFill, Colors.black, 0.18)!,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(Radii.pill),
+                boxShadow: [
+                  BoxShadow(
+                    color: p.accent.withValues(alpha: _hover ? 0.55 : 0.32),
+                    blurRadius: _hover ? 28 : 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.add_rounded, color: Colors.white, size: 22),
                   const SizedBox(width: Space.s),
                   Text(
-                    label,
+                    widget.label,
                     style: TextStyles.callout.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,

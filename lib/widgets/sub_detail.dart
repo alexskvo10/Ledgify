@@ -23,11 +23,17 @@ Future<void> showSubDetail(BuildContext context, Subscription sub) {
     pageBuilder: (dialogContext, _, _) =>
         _DetailCard(id: sub.id, hostContext: context),
     transitionBuilder: (_, anim, _, child) {
-      final curved = CurvedAnimation(parent: anim, curve: Motion.enter);
+      // Fade in, and scale with a slight overshoot — the card "pops".
+      final fade = CurvedAnimation(parent: anim, curve: Motion.enter);
+      final pop = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutBack,
+        reverseCurve: Curves.easeInCubic,
+      );
       return FadeTransition(
-        opacity: curved,
+        opacity: fade,
         child: ScaleTransition(
-          scale: Tween(begin: 0.94, end: 1.0).animate(curved),
+          scale: Tween(begin: 0.9, end: 1.0).animate(pop),
           child: child,
         ),
       );
@@ -160,9 +166,7 @@ class _DetailCard extends StatelessWidget {
                                         !sub.firstPayment.isAfter(today)
                                     ? s.oneTimePaid
                                     : s.noCharge)
-                              : next.difference(today).inDays < 7
-                              ? '${s.longDate(next)} · ${s.relativeDay(next, today).toLowerCase()}'
-                              : s.longDate(next),
+                              : s.fullDate(next, today),
                         ),
                         _Row(s.payingSince, s.longDate(sub.firstPayment)),
                         _Row(s.totalSpent, s.money(spent, sub.currency)),

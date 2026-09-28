@@ -174,6 +174,22 @@ class SubsProvider extends ChangeNotifier {
         ).compareTo(toBase(a, a.monthlyEquivalent)),
       );
 
+  /// The nearest upcoming charge (the priciest one if several share a day).
+  Payment? get nextPayment {
+    Payment? best;
+    for (final s in _counted) {
+      final d = s.nextPaymentFrom(today);
+      if (d == null) continue;
+      final v = toBase(s, s.amount);
+      if (best == null ||
+          d.isBefore(best.date) ||
+          (d == best.date && v > best.baseAmount)) {
+        best = Payment(s, d, v);
+      }
+    }
+    return best;
+  }
+
   /// Charges inside each subscription's own reminder window, soonest first.
   List<Payment> get dueReminders {
     final list = <Payment>[];

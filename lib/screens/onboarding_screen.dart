@@ -23,6 +23,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pages = PageController();
   int _page = 0;
 
+  /// Darker shades of the slide colours so white text stays readable.
+  static const _buttonColors = [
+    Color(0xFF1B8A3B),
+    Color(0xFF0066CC),
+    Color(0xFFB35600),
+  ];
+
   static const _icons = [
     Icons.layers_rounded,
     Icons.calendar_month_rounded,
@@ -207,6 +214,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 ),
                                 const Spacer(),
                                 AppButton(
+                                  // Tinted like the current slide.
+                                  color: _buttonColors[_page],
                                   label: s.next,
                                   icon: Icons.arrow_forward_rounded,
                                   onPressed: () => _go(_page + 1),

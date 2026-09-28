@@ -9,7 +9,7 @@ import '../theme/tokens.dart';
 /// Core building blocks of the design system (docs/DESIGN_SYSTEM.md).
 
 /// Surface card: 1px stroke, rounded, optional tap with hover/press feedback.
-class AppCard extends StatelessWidget {
+class AppCard extends StatefulWidget {
   const AppCard({
     super.key,
     required this.child,
@@ -26,19 +26,46 @@ class AppCard extends StatelessWidget {
   final Color? borderColor;
 
   @override
+  State<AppCard> createState() => _AppCardState();
+}
+
+/// Tappable cards react to the mouse: the surface lightens and the outline
+/// turns green, so on desktop it is obvious what can be clicked.
+class _AppCardState extends State<AppCard> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Material(
-      color: color ?? p.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: Radii.card,
-        side: BorderSide(color: borderColor ?? p.stroke),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        hoverColor: p.surfaceHover,
-        child: Padding(padding: padding, child: child),
+    final hover = _hover && widget.onTap != null;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : MouseCursor.defer,
+      child: AnimatedContainer(
+        duration: Motion.fast,
+        curve: Motion.enter,
+        decoration: BoxDecoration(
+          color: hover ? p.surfaceHover : (widget.color ?? p.surface),
+          borderRadius: Radii.card,
+          border: Border.all(
+            color: hover
+                ? p.accent.withValues(alpha: 0.45)
+                : (widget.borderColor ?? p.stroke),
+          ),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: Radii.card,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            hoverColor: Colors.transparent,
+            child: Padding(padding: widget.padding, child: widget.child),
+          ),
+        ),
       ),
     );
   }
@@ -105,33 +132,49 @@ class AppChip extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      child: Material(
-        color: selected ? p.tint(c, 1.2) : p.sunken,
-        shape: StadiumBorder(
-          side: BorderSide(color: selected ? c : Colors.transparent),
+      // Colour and outline cross-fade when the selection changes.
+      child: AnimatedContainer(
+        duration: Motion.base,
+        curve: Motion.enter,
+        decoration: ShapeDecoration(
+          color: selected ? p.tint(c, 1.2) : p.sunken,
+          shape: StadiumBorder(
+            side: BorderSide(color: selected ? c : Colors.transparent),
+          ),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onTap();
-          },
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 34),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (leading != null) ...[leading!, const SizedBox(width: 6)],
-                  Text(
-                    label,
-                    style: TextStyles.subhead.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w600,
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const StadiumBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 34),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (leading != null) ...[
+                      leading!,
+                      const SizedBox(width: 6),
+                    ],
+                    AnimatedDefaultTextStyle(
+                      duration: Motion.base,
+                      style: TextStyles.subhead.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      child: Text(label),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -188,6 +231,7 @@ class AppButton extends StatelessWidget {
     this.icon,
     this.kind = ButtonKind.primary,
     this.expand = false,
+    this.color,
   });
 
   final String label;
@@ -196,11 +240,14 @@ class AppButton extends StatelessWidget {
   final ButtonKind kind;
   final bool expand;
 
+  /// Overrides the primary fill (keep white-text contrast ≥ 4.5:1).
+  final Color? color;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final (bg, fg) = switch (kind) {
-      ButtonKind.primary => (p.accentFill, Colors.white),
+      ButtonKind.primary => (color ?? p.accentFill, Colors.white),
       ButtonKind.secondary => (p.sunken, p.textPrimary),
       ButtonKind.danger => (p.tint(p.danger), p.danger),
     };

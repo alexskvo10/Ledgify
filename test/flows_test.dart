@@ -128,7 +128,7 @@ void main() {
 
   testWidgets('delete from the detail card and undo', (tester) async {
     final subs = await boot(tester, demo: true);
-    await tester.tap(find.text('Subscriptions'));
+    await tester.tap(find.byIcon(Icons.view_agenda_rounded));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Spotify').first);
     await tester.pumpAndSettle();
@@ -141,10 +141,31 @@ void main() {
     expect(subs.all.any((s) => s.name == 'Spotify'), isTrue);
   });
 
+  testWidgets('swipe right edits, swipe left deletes', (tester) async {
+    final subs = await boot(tester, demo: true);
+    await tester.tap(find.byIcon(Icons.view_agenda_rounded));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('Spotify'), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit subscription'), findsOneWidget);
+    expect(subs.all.any((s) => s.name == 'Spotify'), isTrue);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.text('Spotify'), const Offset(-400, 0));
+    await settle(tester);
+    expect(subs.all.any((s) => s.name == 'Spotify'), isFalse);
+    // onDismissed fires only after the slide-away animation; let its disk
+    // write finish too before looking for the toast.
+    await settle(tester);
+    expect(find.text('Undo'), findsOneWidget);
+  });
+
   testWidgets('archive hides from totals and the default list', (tester) async {
     final subs = await boot(tester, demo: true);
     final before = subs.monthlyForecast;
-    await tester.tap(find.text('Subscriptions'));
+    await tester.tap(find.byIcon(Icons.view_agenda_rounded));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Spotify').first);
     await tester.pumpAndSettle();
@@ -174,7 +195,7 @@ void main() {
 
   testWidgets('budget can be set from statistics', (tester) async {
     await boot(tester, demo: true);
-    await tester.tap(find.text('Statistics'));
+    await tester.tap(find.byIcon(Icons.donut_large_rounded));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Set budget'));
     await tester.pumpAndSettle();
@@ -229,7 +250,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Subscriptions'));
+    await tester.tap(find.byIcon(Icons.view_agenda_rounded));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Gym'));
     await tester.pumpAndSettle();

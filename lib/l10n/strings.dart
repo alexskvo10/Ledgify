@@ -107,6 +107,19 @@ class S {
     return dayMonth(date);
   }
 
+  /// "1 October 2026 · in 3 days" within a week, otherwise just the date
+  /// (relativeDay would repeat the date).
+  String fullDate(DateTime date, DateTime today) {
+    final diff = DateTime.utc(
+      date.year,
+      date.month,
+      date.day,
+    ).difference(DateTime.utc(today.year, today.month, today.day)).inDays;
+    return diff >= 0 && diff < 7
+        ? '${longDate(date)} · ${relativeDay(date, today).toLowerCase()}'
+        : longDate(date);
+  }
+
   String inDays(int n) => _ru
       ? 'Через ${_plural(n, one: '$n день', few: '$n дня', many: '$n дней', other: '$n дня')}'
       : 'In $n ${n == 1 ? 'day' : 'days'}';
@@ -352,6 +365,7 @@ class S {
   String monthsN(int n) => _t('$n mo', '$n мес');
   String get byCategory => _t('By category', 'По категориям');
   String get mostExpensive => _t('Most expensive', 'Самые дорогие');
+  String get nextChargeTitle => _t('Next charge', 'Ближайшее списание');
   String get statsEmpty =>
       _t('No active subscriptions', 'Нет активных подписок');
   String get statsEmptyBody => _t(
